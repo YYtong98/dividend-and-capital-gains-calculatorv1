@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>持股平台税务影响测算模型</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.8;
+            color: #212529;
+            max-width: 1100px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1, h2 {
+            color: #003366;
+            border-bottom: 3px solid #0056b3;
+            padding-bottom: 10px;
+            margin-top: 45px;
+        }
+        .summary, .input-section, .scenario-card {
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-left: 5px solid #0056b3;
+        }
+        .summary {
+            background-color: #e6f0ff;
+            border-left-color: #003366;
+        }
+        .summary h3 { margin-top: 0; color: #003366; }
+        .input-section label { font-weight: bold; margin-right: 10px; }
+        .input-section input {
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            width: 250px;
+            font-size: 1em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #004a99;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) { background-color: #f8f9fa; }
+        .item-title { font-weight: bold; width: 20%; background-color: #f1f3f5; }
+        .basis-cell {
+            font-size: 0.85em;
+            color: #5a6268;
+            background-color: #e9ecef;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+        .total-tax-row td { font-weight: bold; color: #d93025; }
+        .net-income-row td { font-weight: bold; color: #1e8e3e; }
+        .highlight { font-weight: bold; }
+
+        details {
+            margin-top: 10px;
+            font-size: 0.9em;
+            background-color: #f7f7f7;
+            border-radius: 4px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        summary {
+            font-weight: bold;
+            color: #0056b3;
+            cursor: pointer;
+        }
+        .calc-step {
+            padding-left: 15px;
+            margin-top: 5px;
+        }
+        .calc-step li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>持股平台税务影响测算模型</h1>
+
+    <div class="summary">
+        <h3>建议</h3>
+        <ul>
+            <li><b>若主要目标是“分红再投资”或长期持有：</b>优先选择 <span class="highlight">公司</span> 作为持股平台，以享受居民企业间股息红利免税带来的<span class="highlight">递延纳税</span>效果。</li>
+            <li><b>若主要目标是“转让退出”或实现个人财富：</b>优先选择 <span class="highlight">合伙企业</span> 作为持股平台，以规避公司架构的<span class="highlight">双重征税</span>，实现整体税负最低化。</li>
+        </ul>
+    </div>
+
+    <div class="input-section">
+        <h2>测算参数</h2>
+        <label for="income">请输入总金额 (分红总额 或 股权/股票转让净收益):</label>
+        <input type="number" id="income" placeholder="例如: 10000000" oninput="calculate()">
+    </div>
+
+    <h2>场景一：非上市公司分红</h2>
+    <div class="scenario-card">
+        <table id="s1_table"></table>
+    </div>
+    
+    <h2>场景二：非上市公司股权转让</h2>
+    <div class="scenario-card">
+        <table id="s2_table"></table>
+    </div>
+
+    <h2>场景三：上市公司分红</h2>
+    <div class="scenario-card">
+        <table id="s3_table"></table>
+    </div>
+
+    <h2>场景四：上市公司股票转让</h2>
+    <div class="scenario-card">
+        <table id="s4_table"></table>
+    </div>
+
+
+<script>
+    function formatCurrency(num) {
+        if (isNaN(num)) return 'N/A';
+        return num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function getBusinessTaxInfo(income) {
+        if (income <= 0) return { tax: 0, rate: 0, deduction: 0, level: 'N/A' };
+        if (income <= 30000) {
+            return { tax: income * 0.05, rate: 5, deduction: 0, level: '不超过 30,000 元的部分' };
+        } else if (income <= 90000) {
+            return { tax: income * 0.10 - 1500, rate: 10, deduction: 1500, level: '超过 30,000 元至 90,000 元的部分' };
+        } else if (income <= 300000) {
+            return { tax: income * 0.20 - 10500, rate: 20, deduction: 10500, level: '超过 90,000 元至 300,000 元的部分' };
+        } else if (income <= 500000) {
+            return { tax: income * 0.30 - 40500, rate: 30, deduction: 40500, level: '超过 300,000 元至 500,000 元的部分' };
+        } else {
+            return { tax: income * 0.35 - 65500, rate: 35, deduction: 65500, level: '超过 500,000 元的部分' };
+        }
+    }
+    
+    function generateBusinessTaxBreakdown(income) {
+        if (income <= 0) return '';
+        const taxInfo = getBusinessTaxInfo(income);
+        return `
+            <details>
+                <summary>点击查看“经营所得”个税计算过程</summary>
+                <ul class="calc-step">
+                    <li><b>应纳税所得额:</b> ${formatCurrency(income)} 元</li>
+                    <li><b>适用税率表:</b> 《个人所得税法》税率表二 (经营所得适用)</li>
+                    <li><b>所属区间:</b> ${taxInfo.level}</li>
+                    <li><b>适用税率:</b> ${taxInfo.rate}%</li>
+                    <li><b>速算扣除数:</b> ${formatCurrency(taxInfo.deduction)} 元</li>
+                    <li><b>计算公式:</b> 应纳税所得额 × 税率 - 速算扣除数</li>
+                    <li><b>应纳个税:</b> ${formatCurrency(income)} × ${taxInfo.rate}% - ${formatCurrency(taxInfo.deduction)} = <b class="highlight">${formatCurrency(taxInfo.tax)}</b> 元</li>
+                </ul>
+            </details>
+        `;
+    }
+
+    function calculate() {
+        const income = parseFloat(document.getElementById('income').value) || 0;
+        const f_income = formatCurrency(income);
+
+        // ========================== 场景一: 非上市分红 ==========================
+        let s1_c_person_tax = income * 0.20;
+        let s1_c_total_tax = s1_c_person_tax;
+        let s1_p_person_tax = income * 0.20;
+        let s1_p_total_tax = s1_p_person_tax;
+        
+        document.getElementById('s1_table').innerHTML = `
+            <thead><tr><th>对比项</th><th>方案一：通过【公司】持股</th><th>方案二：通过【合伙企业】持股</th></tr></thead>
+            <tbody>
+                <tr><td class="item-title">分红总额</td><td>${f_income}</td><td>${f_income}</td></tr>
+                <tr><td class="item-title">平台层面所得税</td><td>0.00</td><td>0.00</td></tr>
+                <tr><td class="item-title">个人层面个税</td><td>${formatCurrency(s1_c_person_tax)} (按20%)</td><td>${formatCurrency(s1_p_person_tax)} (按20%)</td></tr>
+                <tr class="total-tax-row"><td class="item-title">总税负</td><td>${formatCurrency(s1_c_total_tax)} (${(s1_c_total_tax/income*100||0).toFixed(1)}%)</td><td>${formatCurrency(s1_p_total_tax)} (${(s1_p_total_tax/income*100||0).toFixed(1)}%)</td></tr>
+                <tr class="net-income-row"><td class="item-title">股东到手净额</td><td>${formatCurrency(income - s1_c_total_tax)}</td><td>${formatCurrency(income - s1_p_total_tax)}</td></tr>
+                <tr><td class="item-title basis-cell">法律依据</td>
+                    <td class="basis-cell"><b>公司层面:</b>《企业所得税法》第26条，符合条件的居民企业间股息红利为免税收入。<br><b>个人层面:</b>《个人所得税法》规定，从公司取得的股息红利，按20%税率纳税。</td>
+                    <td class="basis-cell"><b>穿透规则:</b>《国税函(2001)84号》规定，合伙企业对外投资分回的股息红利，不并入企业收入，直接穿透至个人。<br><b>个人层面:</b> 按“利息、股息、红利所得”项目，由个人合伙人缴纳20%个税。</td>
+                </tr>
+            </tbody>`;
+
+        // ========================== 场景二: 非上市转让 ==========================
+        let s2_c_jia_tax = income * 0.25;
+        let s2_c_person_tax = (income - s2_c_jia_tax) * 0.20;
+        let s2_c_total_tax = s2_c_jia_tax + s2_c_person_tax;
+
+        const s2_p_tax_info = getBusinessTaxInfo(income);
+        let s2_p_person_tax = s2_p_tax_info.tax;
+        let s2_p_total_tax = s2_p_person_tax;
+        
+        document.getElementById('s2_table').innerHTML = `
+            <thead><tr><th>对比项</th><th>方案一：通过【公司】持股</th><th>方案二：通过【合伙企业】持股</th></tr></thead>
+            <tbody>
+                <tr><td class="item-title">转让净收益</td><td>${f_income}</td><td>${f_income}</td></tr>
+                <tr><td class="item-title">平台层面所得税</td><td>${formatCurrency(s2_c_jia_tax)} (按25%)</td><td>0.00</td></tr>
+                <tr><td class="item-title">个人层面个税</td><td>${formatCurrency(s2_c_person_tax)} (按20%)</td><td>${formatCurrency(s2_p_person_tax)} (按5-35%) ${generateBusinessTaxBreakdown(income)}</td></tr>
+                <tr class="total-tax-row"><td class="item-title">总税负</td><td>${formatCurrency(s2_c_total_tax)} (${(s2_c_total_tax/income*100||0).toFixed(1)}%)</td><td>${formatCurrency(s2_p_total_tax)} (${(s2_p_total_tax/income*100||0).toFixed(1)}%)</td></tr>
+                <tr class="net-income-row"><td class="item-title">股东到手净额</td><td>${formatCurrency(income - s2_c_total_tax)}</td><td>${formatCurrency(income - s2_p_total_tax)}</td></tr>
+                <tr><td class="item-title basis-cell">法律依据</td>
+                    <td class="basis-cell"><b>公司层面:</b>《企业所得税法》规定，股权转让收益计入应纳税所得额，税率25%。<br><b>个人层面:</b> 税后利润分红，按20%缴纳个税，形成双重征税。</td>
+                    <td class="basis-cell"><b>穿透规则:</b>《财税(2000)91号》规定“先分后税”。<br><b>个人层面:</b> 股权转让收益穿透至个人，按“经营所得”适用5%-35%超额累进税率。</td>
+                </tr>
+            </tbody>`;
+        
+        // ========================== 场景三: 上市公司分红 ==========================
+        let s3_c_total_tax_short = (income * 0.25) + (income * 0.75 * 0.20);
+        let s3_c_total_tax_long = income * 0.20;
+        let s3_p_total_tax = income * 0.20;
+        
+        document.getElementById('s3_table').innerHTML = `
+            <thead><tr><th>对比项</th><th>方案一：通过【公司】持股</th><th>方案二：通过【合伙企业】持股</th></tr></thead>
+            <tbody>
+                 <tr><td class="item-title">分红总额</td><td>${f_income}</td><td>${f_income}</td></tr>
+                 <tr class="total-tax-row"><td class="item-title">总税负<br>(持股<1年)</td>
+                    <td>${formatCurrency(s3_c_total_tax_short)} (${(s3_c_total_tax_short/income*100||0).toFixed(1)}%)</td>
+                    <td rowspan="2" style="vertical-align: middle;">${formatCurrency(s3_p_total_tax)} (${(s3_p_total_tax/income*100||0).toFixed(1)}%)</td>
+                 </tr>
+                 <tr class="total-tax-row"><td class="item-title">总税负<br>(持股≥1年)</td><td>${formatCurrency(s3_c_total_tax_long)} (${(s3_c_total_tax_long/income*100||0).toFixed(1)}%)</td></tr>
+                 <tr class="net-income-row"><td class="item-title">股东到手净额<br>(最优情况)</td><td>${formatCurrency(income - s3_c_total_tax_long)}</td><td>${formatCurrency(income - s3_p_total_tax)}</td></tr>
+                 <tr><td class="item-title basis-cell">法律依据</td>
+                    <td class="basis-cell">《财税(2015)101号》规定，持有的上市公司流通股，持股期限超过1年的，股息红利所得暂免征收企业所得税。否则需补缴。</td>
+                    <td class="basis-cell">个人通过合伙企业间接持股，不适用上市公司股息红利差异化个税政策，仍按20%缴纳个税。</td>
+                 </tr>
+            </tbody>`;
+
+        // ========================== 场景四: 上市公司转让 ==========================
+        let s4_vat = income / (1 + 0.06) * 0.06;
+        let s4_surtax = s4_vat * 0.12; // 增值税附加税费，通常为12% (7%城建+3%教育+2%地方教育)
+        let s4_total_vat = s4_vat + s4_surtax;
+        
+        let s4_c_income_after_vat = income - s4_total_vat;
+        let s4_c_jia_tax = s4_c_income_after_vat * 0.25;
+        let s4_c_person_tax = (s4_c_income_after_vat - s4_c_jia_tax) * 0.20;
+        let s4_c_total_tax = s4_total_vat + s4_c_jia_tax + s4_c_person_tax;
+
+        const s4_p_tax_info = getBusinessTaxInfo(income - s4_total_vat);
+        let s4_p_person_tax = s4_p_tax_info.tax;
+        let s4_p_total_tax = s4_total_vat + s4_p_person_tax;
+        
+        document.getElementById('s4_table').innerHTML = `
+            <thead><tr><th>对比项</th><th>方案一：通过【公司】持股</th><th>方案二：通过【合伙企业】持股</th></tr></thead>
+            <tbody>
+                <tr><td class="item-title">转让净收益</td><td>${f_income}</td><td>${f_income}</td></tr>
+                <tr><td class="item-title">平台层面增值税及附加</td><td>${formatCurrency(s4_total_vat)}</td><td>${formatCurrency(s4_total_vat)}</td></tr>
+                <tr><td class="item-title">平台层面所得税</td><td>${formatCurrency(s4_c_jia_tax)}</td><td>0.00</td></tr>
+                <tr><td class="item-title">个人层面个税</td><td>${formatCurrency(s4_c_person_tax)}</td><td>${formatCurrency(s4_p_person_tax)} ${generateBusinessTaxBreakdown(income - s4_total_vat)}</td></tr>
+                <tr class="total-tax-row"><td class="item-title">总税负</td><td>${formatCurrency(s4_c_total_tax)} (${(s4_c_total_tax/income*100||0).toFixed(1)}%)</td><td>${formatCurrency(s4_p_total_tax)} (${(s4_p_total_tax/income*100||0).toFixed(1)}%)</td></tr>
+                <tr class="net-income-row"><td class="item-title">股东到手净额</td><td>${formatCurrency(income - s4_c_total_tax)}</td><td>${formatCurrency(income - s4_p_total_tax)}</td></tr>
+                <tr><td class="item-title basis-cell">法律依据</td>
+                    <td class="basis-cell"><b>增值税:</b>《财税(2016)36号》规定，转让金融商品按6%缴纳增值税。<br><b>所得税:</b> 同时缴纳企业所得税和个人所得税。</td>
+                    <td class="basis-cell"><b>增值税:</b> 同左。<br><b>个人所得税:</b> 穿透至个人按“经营所得”纳税。<br><b>个人炒股免税政策:</b>《财税字(1998)61号》规定个人直接转让股票暂免个税，但通过合伙企业间接转让不适用该优惠。</td>
+                </tr>
+            </tbody>`;
+    }
+
+    // Initial calculation on page load
+    window.onload = function() {
+        document.getElementById('income').value = 10000000;
+        calculate();
+    };
+</script>
+
+</body>
+</html>
